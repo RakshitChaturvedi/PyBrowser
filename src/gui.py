@@ -8,19 +8,11 @@ from src.styles import style, DEFAULT_STYLE_SHEET, CSSParser, cascade_priority
 
 class Tab:
     def __init__(self, tab_height):
-        self.window = tkinter.Tk()
-        self.canvas = tkinter.Canvas(
-            self.window,
-            width=WIDTH,
-            height=HEIGHT,
-            bg="white",           
-        )
-        self.canvas.pack()
         self.tab_height = tab_height
         self.url = None
         self.scroll = 0
-
         self.history = []
+        self.focus = None
 
     def draw(self, canvas, offset):
         for cmd in self.display_list:
@@ -29,12 +21,12 @@ class Tab:
             cmd.execute(self.scroll - offset, canvas)
 
     def load(self, url):
-        self.history.append(url)
-        self.url = url
-        body = url.request()
-        self.nodes = HTMLParser(body).parse()
+        self.history.append(url)                    # for maintaining history / tracking                                
+        self.url = url                              
+        body = url.request()                        # extracts body from the url
+        self.nodes = HTMLParser(body).parse()       # a tree of nodes (texts and tags)
 
-        rules = DEFAULT_STYLE_SHEET.copy()
+        self.rules = DEFAULT_STYLE_SHEET.copy()
         links = [node.attributes["href"]
                  for node in tree_to_list(self.nodes, [])
                  if isinstance(node, Element)
@@ -47,17 +39,24 @@ class Tab:
                 body = style_url.request()
             except:
                 continue
-            rules.extend(CSSParser(body).parse())
+            self.rules.extend(CSSParser(body).parse())
 
-
-        style(self.nodes, sorted(rules, key=cascade_priority))
+        style(self.nodes, sorted(self.rules, key=cascade_priority))
 
         self.document = DocumentLayout(self.nodes)
         self.document.layout()
         self.display_list = []
         
         paint_tree(self.document, self.display_list)
+        self.render()
     
+    def render(self):
+        style(self.nodes, sorted(self.rules, key=cascade_priority)) # seperate styles from tags
+        self.document = DocumentLayout(self.nodes)
+        self.document.layout()
+        self.display_list = []
+        paint_tree(self.document, self.display_list)
+
     def go_back(self):
         if len(self.history) > 1:
             self.history.pop()
@@ -71,12 +70,18 @@ class Tab:
     def scrollup(self):
         self.scroll -= SCROLL_STEP
 
+    def keypress(self, char):
+        if self.focus:
+            self.focus.attributes["value"] += char
+            self.render()
+
     def click(self, x, y):
         y += self.scroll
         objs = [obj for obj in tree_to_list(self.document, [])
                 if obj.x <= x < obj.x + obj.width
                 and obj.y <= y < obj.y + obj.height]
         if not objs: return
+
         elt = objs[-1].node
         while elt:
             if isinstance(elt, Text):
@@ -85,6 +90,13 @@ class Tab:
                 if self.url is not None:
                     url = self.url.resolve(elt.attributes["href"])
                     return self.load(url)
+            elif elt.tag == "input":
+                elt.attributes["value"] = ""
+                if self.focus:
+                    self.focus.is_focused = False
+                self.focus = elt
+                elt.is_focused = True
+                return self.render()
             elt = elt.parent
 
 class Browser:
@@ -109,13 +121,18 @@ class Browser:
         self.active_tab = None
         self.chrome = Chrome(self)
 
+    # creates a new tab 
     def new_tab(self, url):
-        new_tab = Tab(HEIGHT - self.chrome.bottom)
-        new_tab.load(url)
+        new_tab = Tab(HEIGHT - self.chrome.bottom)  # Initializes "Tab" class
+        new_tab.load(url)                           # loads the url using Tab's load method
 
-        self.active_tab = new_tab
-        self.tabs.append(new_tab)
+        self.active_tab = new_tab                  
+        self.tabs.append(new_tab)                   # for maintaining multiple tabs
         self.draw()
+    
+    # Unfocus the browser, used to focus on other guis
+    def blur(self): 
+        self.focus = None
 
     def handle_down(self, e):
         if self.active_tab:
@@ -129,8 +146,11 @@ class Browser:
     
     def handle_click(self, e):
         if e.y < self.chrome.bottom:
+            self.focus = None
             self.chrome.click(e.x, e.y)
-        elif self.active_tab:
+        elif self.active_tab:              
+            self.focus = "content"
+            self.chrome.blur()
             tab_y = e.y - self.chrome.bottom
             self.active_tab.click(e.x, tab_y)
         self.draw()
@@ -138,8 +158,13 @@ class Browser:
     def handle_key(self, e):
         if len(e.char) == 0: return
         if not (0x20 <= ord(e.char) < 0x7f): return
+
         self.chrome.keypress(e.char)
-        self.draw()
+        if self.chrome.keypress(e.char):
+            self.draw()
+        elif self.focus == "content":
+            self.active_tab.keypress(e.char)
+            self.draw()
     
     def handle_enter(self, e):
         self.chrome.enter()
@@ -289,9 +314,15 @@ class Chrome:
                     self.focus = "address bar"
                     self.address_bar = ""
     
+    def blur(self):
+        self.focus = None
+
     def keypress(self, char):
+        # return true if browser chrome consumed the key
         if self.focus == "address bar":
             self.address_bar += char
+            return True
+        return False
 
     def enter(self):
         if self.focus == "address bar":

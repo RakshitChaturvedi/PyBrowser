@@ -121,6 +121,9 @@ class InputLayout:
         self.height = self.font.metrics("linespace")
     
     def paint(self):
+        cmds = []
+        bgcolor = self.node.style.get("background-color", "transparent")
+
         if self.node.tag == "input":
             text = self.node.attributes.get("value", "")
         elif self.node.tag == "button":
@@ -130,7 +133,15 @@ class InputLayout:
                 print("Ignoring HTML content inside button")
                 text = ""
         color = self.node.style["color"]
-        return [DrawText(self.x, self.y, text, self.font, color)]
+        cmds.append(DrawText(self.x, self.y, text, self.font, color))
+
+        if self.node.is_focused:
+            cx = self.x + self.font.measure(text)
+            cmds.append(DrawLine(
+                cx, self.y, cx, self.y + self.height, "black", 1
+            ))
+        
+        return cmds
     
     def should_paint(self):
         return True

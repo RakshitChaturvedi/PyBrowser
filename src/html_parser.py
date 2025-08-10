@@ -4,6 +4,7 @@ class Text:
         self.children = [] # text nodes dont have children, but kept for consistency
         self.parent = parent
         self.style = {}
+        self.is_focused = False
 
     def __repr__(self):
         return repr(self.text)
@@ -15,6 +16,7 @@ class Element:
         self.children = []              # list of children, element or text
         self.parent = parent            # pointer to parent element
         self.style = {}
+        self.is_focused = False
 
     def __repr__(self):
         return "<" + self.tag + ">"
@@ -38,6 +40,7 @@ class HTMLParser:
         self.body = body                # raw html as string
         self.unfinished = []            # stack of open (unfinished) elements
 
+    # seperates tags from text
     def parse(self):
         text = ""
         in_tag = False
@@ -58,11 +61,12 @@ class HTMLParser:
     """
     Example input = <html><body>Hello World!</body></html>
     char        in_tag      action
-     <          True        Start of tag -> flush text
-     >          False       End of tag -> process tag
-     other      False       Build up tag name or text
+     <          True        add_text() --> clean text to ""
+     >          False       add_tag() --> clean text to ""
+     other      False       add to text
     """
 
+    # Seperate tag name from attribute
     def get_attributes(self, text):
         parts = text.split()
         tag = parts[0].casefold()
@@ -85,36 +89,41 @@ class HTMLParser:
         'target': '_blank'
     }
     """
-
+    
     def add_text(self, text):
         if text.isspace(): return
-        self.implicit_tags(None)
+        self.implicit_tags(None)        # ensure basic doc structure
 
-        parent = self.unfinished[-1]
-        node = Text(text, parent)
-        parent.children.append(node)
+        parent = self.unfinished[-1]    # parent is most recent unfinished tag
+        node = Text(text, parent)       # create new Text node instance with reference to its parent element
+        parent.children.append(node)    # append the current children to parent's list of children
 
     def add_tag (self, tag):
-        tag, attributes = self.get_attributes(tag)
-        if tag.startswith("!"): return
-        self.implicit_tags(tag)
+        tag, attributes = self.get_attributes(tag)  # seperate tag name from its attributes
+        if tag.startswith("!"): return              # to ignore comments (<!-- -->) or doctype (<!DOCTYPE>) tags
+        self.implicit_tags(tag)                     # ensure basic doc structure
 
         # Close tag finishes the last unfinished node by adding it to the prev unfinished node in list
         if tag.startswith("/"): 
-            if len(self.unfinished) == 1: return # to prevent stack overflow / malformed tree, as its likely root node
-            node = self.unfinished.pop()
-            parent = self.unfinished[-1]
-            parent.children.append(node)
-        elif tag in self.SELF_CLOSING_TAGS:
-            parent = self.unfinished[-1]
-            node = Element(tag, attributes, parent)
-            parent.children.append(node)
-        else:   # Open tags adds an unfinished node to the end of the list
-            parent = self.unfinished[-1] if self.unfinished else None
-            node = Element(tag, attributes, parent)
-            self.unfinished.append(node)
+            if len(self.unfinished) == 1: return    # to prevent stack overflow / malformed tree, as its likely root node
+            node = self.unfinished.pop()            # pop most recent unfinished tag as node
+            parent = self.unfinished[-1]            # the new last item in unfinished tags is current node's parent
+            parent.children.append(node)            # add current node to the list of children of it's parent
 
-    def implicit_tags(self, tag):
+        # Handle self closing tags (e.g., <br>, <hr>, <img>)
+        elif tag in self.SELF_CLOSING_TAGS:
+            parent = self.unfinished[-1]                # current tag's parent is the recent-most unfinished tag    
+            node = Element(tag, attributes, parent)     # create a new Element node instance with reference to its attributes and parent
+            parent.children.append(node)                # add current node to it's parents list of children
+
+        # Open tags adds an unfinished node to the end of the list
+        else:   
+            parent = self.unfinished[-1] if self.unfinished else None   # current tag's parent is recent-most unfinished tag if unfinished tag exists, 
+            node = Element(tag, attributes, parent)                     # create new Element node instance with reference to its attributes and parent
+            self.unfinished.append(node)                                # add it to unfinished tags list
+
+    # Ensures minimal basic HTML structure exists in document.
+    def implicit_tags(self, tag): 
         while True:
             open_tags = [node.tag for node in self.unfinished]
             if open_tags == [] and tag != "html":
@@ -130,63 +139,16 @@ class HTMLParser:
                 break
 
     def finish(self):
+        # if there are no unfinished tag, check for minimal html structure 
         if not self.unfinished:
             self.implicit_tags(None)
+
+        # if there are unfinished tags (except root node), finish them.
         while len(self.unfinished) > 1:
             node = self.unfinished.pop()
             parent = self.unfinished[-1]
             parent.children.append(node)
+        
+        # return top level root node
         return self.unfinished.pop()
     
-
-    """
-    Example: <html><body><b>Hello <i>World!</i></b></body></html>
-
-    intial state: unfinished = []
-    1) <html> -> add_tag("html")
-        -> new Element("html") created, no parent (since unfinished is empty)
-        -> unfinished = [html]
-
-        2) <body> -> add_tag("body")
-            -> new Element("body", parent=html)
-            -> unfinished = [html, body]
-
-            3) <b> -> add_tag("b")
-                -> new Element("b, parent = body)
-                -> unfinished = [html, body, b]
-
-                4) Text "Hello " -> add_text("Hello ")
-                    -> text.isspace() is false
-                    -> parent = b
-                    -> create Text("Hello ", parent= b)
-                    -> append Text("Hello ") to b.children
-
-                    5) <i> -> add_tag("i")
-                        -> new Element("i", parent = b)
-                        -> unfinished = [html, body, b, i]
-                        
-                        6) Text "World!" -> add_text("World!)
-                            -> text.isspace() is false
-                            -> create Text("World!", parent =i)
-                            -> append Text("World!") to i.children
-                            
-                    7) </i> -> add_tag("/i")
-                        -> node = i (popped from unfinished)
-                        -> parent = b (unfinished[-1])
-                        -> append i (along with its children) to b.children
-                        -> unfinished = [html, body, b]
-
-            8) </b> -> add_tag("/b")
-                -> node = b (popped from unfinished)
-                -> parent = body (unfinished[-1])
-                -> append b (along with its children) to body.children
-                -> unfinished = [html, body]
-
-        9) </body> -> add_tag("/body")
-            -> node = body (popped from unfinished)
-            -> parent = html (unfinished[-1])
-            ->  append body (along with its children) to html.children
-            -> unfinished = [html]
-    10) </html> -> add_tag("/html")
-        -> prevented by if len(unfinished) == 1: return 
-    """
