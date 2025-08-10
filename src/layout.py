@@ -21,6 +21,9 @@ class DocumentLayout:
     
     def paint(self):
         return []       # No painting for the document node itself
+    
+    def should_paint(self):
+        return True
 
 class LineLayout:
     def __init__(self, node, parent, previous):
@@ -56,6 +59,9 @@ class LineLayout:
 
     def paint(self):
         return []
+    
+    def should_paint(self):
+        return True
 
 class TextLayout:
     def __init__(self, node, word, parent, previous):
@@ -87,6 +93,48 @@ class TextLayout:
     def paint(self):
         color = self.node.style["color"]
         return [DrawText(self.x, self.y, self.word, self.font, color)]
+    
+    def should_paint(self):
+        return True
+
+INPUT_WIDTH_PX = 200
+
+class InputLayout:
+    def __init__(self, node, parent, previous):
+        self.node = node
+        self.children = []
+        self.parent = parent
+        self.previous = previous
+
+    def layout(self):
+        weight = self.node.style["font-weight"]
+        style = self.node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(self.node.style["font-size"][:-2])*.75)
+        self.font = get_font(size, weight, style)
+        self.width = INPUT_WIDTH_PX
+        if self.previous:
+            space = self.previous.font.measure(" ")
+            self.x = self.previous.x + space + self.previous.width
+        else:
+            self.x = self.parent.x
+        self.height = self.font.metrics("linespace")
+    
+    def paint(self):
+        if self.node.tag == "input":
+            text = self.node.attributes.get("value", "")
+        elif self.node.tag == "button":
+            if len(self.node.children) == 1 and isinstance(self.node.children[0], Text):
+                text = self.node.children[0].text
+            else:
+                print("Ignoring HTML content inside button")
+                text = ""
+        color = self.node.style["color"]
+        return [DrawText(self.x, self.y, text, self.font, color)]
+    
+    def should_paint(self):
+        return True
+
 
 class BlockLayout:
     def __init__(self, node, parent, previous):        
@@ -106,7 +154,7 @@ class BlockLayout:
             return "inline"
         elif any([isinstance(child, Element) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
             return "block"
-        elif self.node.children:
+        elif self.node.children or self.node.tag == "input":
             return "inline"
         else:
             return "block"
@@ -146,8 +194,11 @@ class BlockLayout:
         else:
             if node.tag == "br":
                 self.new_line()
-            for child in node.children:
-                self.recurse(child)
+            elif node.tag == "input" or node.tag == "button":
+                self.input(node)
+            else:
+                for child in node.children:
+                    self.recurse(child)
 
     # Add word to current line and manage cursor position
     def word(self, node, word): 
@@ -175,6 +226,23 @@ class BlockLayout:
         new_line = LineLayout(self.node, self, last_line)           # create new LineLayout object
         self.children.append(new_line)                              # add the new LineLayout to list of block's children
 
+    def input(self, node):
+        w = INPUT_WIDTH_PX
+        if self.cursor_x + w > self.width:
+            self.new_line()
+        line = self.children[-1]
+        previous_word = line.children[-1] if line.children else None
+        input = InputLayout(node, line, previous_word)
+        line.children.append(input)
+
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2])* .75)
+        font = get_font(size, weight, style)
+
+        self.cursor_x += w + font.measure(" ")
+
     def paint(self):
         cmds = []
         bgcolor = self.node.style.get("background-color", "transparent")
@@ -186,6 +254,10 @@ class BlockLayout:
     def self_rect(self):
         return Rect(self.x, self.y, self.x + self.width, self.y + self.height)
     
+    def should_paint(self):
+        return isinstance(self.node, Text) or \
+            (self.node.tag != "input" and self.node.tag != "button")
+
 """
 Example: <html><body><b>Hello <i>World!</i></b></body></html>
 

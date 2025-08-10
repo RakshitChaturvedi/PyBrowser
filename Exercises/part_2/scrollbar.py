@@ -50,8 +50,8 @@ class Browser:
     def draw(self):
         self.canvas.delete("all")
         if not self.display_list: return
+        # Scrollbar feature
         doc_height = self.display_list[-1][1] + VSTEP
-
         if doc_height > HEIGHT:
             scrollbar_height = HEIGHT * (HEIGHT / doc_height)
             scrollbar_y = HEIGHT * (self.scroll / doc_height)
@@ -63,6 +63,7 @@ class Browser:
                 fill = "blue",  # color
                 width = 0       # no border
             )
+            
         for x,y,c in self.display_list:
             if y > self.scroll + HEIGHT: continue
             if y + VSTEP < self.scroll: continue
@@ -90,7 +91,7 @@ class Browser:
         new_scroll = self.scroll - e.delta
         self.scroll = max(0, min(new_scroll, max_y))
         self.draw()
-            
+
 if __name__ == "__main__":
     import sys
 
