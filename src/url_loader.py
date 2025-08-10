@@ -28,7 +28,7 @@ class URL:
         """
     
     # Creating a socket (Request and Response)
-    def request(self):
+    def request(self, payload= None):
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -40,10 +40,16 @@ class URL:
             ctx = ssl.create_default_context()
             s = ctx.wrap_socket(s, server_hostname=self.host)
 
+        method = "POST" if payload else "GET"
+
         # Sending the Request
-        request = "GET {} HTTP/1.0\r\n".format(self.path)   # \r\n: \r means go to the start of current line, \n means go to the next line.
+        request = "{} {} HTTP/1.0\r\n".format(method, self.path)    # \r\n: \r means go to the start of current line, \n means go to the next line.
+        if payload:
+            length = len(payload.encode("utf8"))
+            request += "Content-Length: {}\r\n".format(length)
         request += "Host: {}\r\n".format(self.host) 
-        request += "\r\n"                                   # add blank line at end of request, if not, the other computer keeps waiting.
+        request += "\r\n"             # add blank line at end of request, if not, the other computer keeps waiting.
+        if payload: request += payload
         s.send(request.encode("utf8"))
 
         """

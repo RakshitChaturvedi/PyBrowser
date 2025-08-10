@@ -1,10 +1,12 @@
 from src.url_loader import URL
 import tkinter
-import tkinter.font
+import urllib
+import urllib.parse
 from src.html_parser import HTMLParser, Element, Text
 from src.layout import DocumentLayout   
 from src.constants import WIDTH, HEIGHT, VSTEP, SCROLL_STEP, paint_tree, tree_to_list, get_font, DrawRect, DrawText, Rect, DrawLine, DrawOutline
 from src.styles import style, DEFAULT_STYLE_SHEET, CSSParser, cascade_priority
+from src.url_loader import URL
 
 class Tab:
     def __init__(self, tab_height):
@@ -20,10 +22,10 @@ class Tab:
             if cmd.bottom < self.scroll: continue
             cmd.execute(self.scroll - offset, canvas)
 
-    def load(self, url):
+    def load(self, url, payload = None):
         self.history.append(url)                    # for maintaining history / tracking                                
         self.url = url                              
-        body = url.request()                        # extracts body from the url
+        body = url.request(payload)                        # extracts body from the url
         self.nodes = HTMLParser(body).parse()       # a tree of nodes (texts and tags)
 
         self.rules = DEFAULT_STYLE_SHEET.copy()
@@ -49,6 +51,24 @@ class Tab:
         
         paint_tree(self.document, self.display_list)
         self.render()
+    
+    def submit_form(self, elt):
+        inputs = [node for node in tree_to_list(elt, [])
+                  if isinstance(node, Element)
+                  and node.tag == "input"
+                  and "name" in node.attributes]
+        body = ""
+        for input in inputs:
+            name = input.attributes["name"]
+            value = input.attributes.get("value", "")
+            name = urllib.parse.quote(name)
+            value = urllib.parse.quote(value)
+            body += "&" + name + "=" + value
+        
+        # body has an extra "&" tucked in the beginning
+        body = body[1:]  
+        url = self.url.resolve(elt.attributes["action"])  
+        self.load(url, body)                             
     
     def render(self):
         style(self.nodes, sorted(self.rules, key=cascade_priority)) # seperate styles from tags
@@ -97,6 +117,10 @@ class Tab:
                 self.focus = elt
                 elt.is_focused = True
                 return self.render()
+            elif elt.tag == "button":
+                while elt:
+                    if elt.tag == "form" and "action" in elt.attributes:
+                        return self.submit_form(elt)
             elt = elt.parent
 
 class Browser:
