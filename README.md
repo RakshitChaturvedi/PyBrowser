@@ -1,4 +1,4 @@
-# PyBrowseL A Web Browser from Scratch in Python
+# PyBrowser A Web Browser from Scratch in Python
 
 A web browser and rendering engine built from the ground up in Python, using only the standard tkinter library for its graphical user interface. This project is an educational deep dive into the full web stack, from networking and protocol handling to HTML/CSS parsing, layout and rendering.
 
@@ -36,8 +36,8 @@ To run the browser, you will need Python 3.
 
 1.  **Clone the repository:**
     ```bash
-    git clone [your-repo-url]
-    cd [your-repo-name]
+    git clone PyBrowser
+    cd PyBrowser
     ```
 2.  **(Optional) Create a virtual environment:**
     ```bash
@@ -47,7 +47,7 @@ To run the browser, you will need Python 3.
 3.  **Run the browser:**
     The browser is run as a module from the project's root directory. Pass a URL as a command-line argument.
     ```bash
-    python -m src.browser [https://browser.engineering/](https://browser.engineering/)
+    python -m src.browser https://browser.engineering/
     ```
 
 ---
