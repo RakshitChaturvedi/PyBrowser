@@ -183,8 +183,8 @@ class Browser:
         if len(e.char) == 0: return
         if not (0x20 <= ord(e.char) < 0x7f): return
 
-        self.chrome.keypress(e.char)
-        if self.chrome.keypress(e.char):
+        consumed_by_chrome = self.chrome.keypress(e.char)
+        if consumed_by_chrome:
             self.draw()
         elif self.focus == "content":
             self.active_tab.keypress(e.char)
