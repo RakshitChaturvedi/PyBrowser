@@ -1,17 +1,13 @@
 import socket
-
-ENTRIES = [ 'Guest1 was here' ]
-
-def do_request(method, url, headers, body):
-    out = "<!doctype html>"
-    for entry in ENTRIES:
-        out += "<p>" + entry + "</p>"
-    return "200 OK", out
+import urllib.parse
 
 def handle_connection(conx):   
     # Reading request line
     req = conx.makefile("b")
     reqline = req.readline().decode('utf8')
+    if not reqline or reqline.isspace():
+        conx.close()
+        return
     method, url, version = reqline.split(" ", 2)
     assert method in ["GET", "POST"]
 
@@ -40,6 +36,51 @@ def handle_connection(conx):
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close() 
+
+# Figure out which function to call for which request
+def do_request(method, url, headers, body):
+    if method == "GET" and url == "/":
+        return "200 OK", show_comments()
+    elif method == "POST" and url == "/add":
+        params = form_decode(body)
+        return "200 OK", add_entry(params)
+    else:
+        return "404 Not Found", not_found(url, method)
+
+# Decode the request body
+def form_decode(body):
+    params = {}
+    for field in body.split("&"):
+        name, value = field.split("=", 1)
+        name = urllib.parse.unquote_plus(name)      # unquote plus handles both "name" and +name+ because
+        value = urllib.parse.unquote_plus(value)    # browsers also use plus sign to encode space
+        params[name] = value
+    return params
+
+ENTRIES = [ 'Guest1 was here' ]
+
+# Handle regular browsing
+def show_comments():
+    out = "<!doctype html>"
+    out += "<form action=add method=post>"
+    out += "<p><input name=guest></p>"
+    out += "<p><button>Sign the book!</button></p>"
+    out += "</form>"
+    for entry in ENTRIES:
+        out+= "<p>" + entry + "</p>"
+    return out
+
+# For page not found
+def not_found(url, method):
+    out = "<!doctype html>"
+    out += "<h1>{} {} not found!</h1>".format(method, url)
+    return out
+
+# Looks up the guest parameter and adds its content as new guest book entry
+def add_entry(params):
+    if 'guest' in params:
+        ENTRIES.append(params['guest'])
+    return show_comments()
 
 if __name__ == "__main__":
     s = socket.socket(

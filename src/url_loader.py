@@ -44,10 +44,10 @@ class URL:
 
         # Sending the Request
         request = "{} {} HTTP/1.0\r\n".format(method, self.path)    # \r\n: \r means go to the start of current line, \n means go to the next line.
+        request += "Host: {}\r\n".format(self.host) 
         if payload:
             length = len(payload.encode("utf8"))
             request += "Content-Length: {}\r\n".format(length)
-        request += "Host: {}\r\n".format(self.host) 
         request += "\r\n"             # add blank line at end of request, if not, the other computer keeps waiting.
         if payload: request += payload
         s.send(request.encode("utf8"))

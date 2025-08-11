@@ -55,6 +55,8 @@ class DrawRect:
     def __init__(self, rect, color):
         self.rect = rect
         self.color = color
+        self.top = self.rect.top
+        self.bottom = self.rect.bottom
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(
@@ -69,6 +71,8 @@ class DrawLine:
         self.rect = Rect(x1, y1, x2, y2)
         self.color = color
         self.thickness = thickness
+        self.top = self.rect.top
+        self.bottom = self.rect.bottom
     
     def execute(self, scroll, canvas):
         canvas.create_line(
@@ -85,6 +89,8 @@ class DrawOutline:
         self.rect = rect
         self.color = color
         self.thickness = thickness
+        self.top = self.rect.top
+        self.bottom = self.rect.bottom
 
     def execute(self, scroll, canvas):
         canvas.create_rectangle(
